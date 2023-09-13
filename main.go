@@ -64,13 +64,13 @@ func main() {
 		log.Println("Успешно подключена БД")
 	}
 
-	go updateStatistics()
+	go startStatisticCheck()
 
 	r := gin.Default()
 
 	r.GET("/post/:id/comments/statistics", getStatisticsHandler)
 
-	log.Println("Успешно запущено на порту :8085")
+	log.Println("Успешно запущено на порту :8095")
 	log.Fatal(r.Run(":8085"))
 }
 
@@ -88,34 +88,39 @@ func connectToDB() (*sql.DB, error) {
 	return db, nil
 }
 
-func updateStatistics() {
+func startStatisticCheck() {
 	log.Println("Обновление статистики включено")
+	updateStatistics()
 	for range time.Tick(5 * time.Minute) {
-		var posts []Post
+		updateStatistics()
+	}
+}
 
-		resp, _ := http.Get(postsUrl)
+func updateStatistics() {
+	var posts []Post
+
+	resp, _ := http.Get(postsUrl)
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	json.Unmarshal(body, &posts)
+
+	for _, post := range posts {
+		var comments []Comment
+		resWordCountMap := make(map[string]int)
+
+		resp, _ := http.Get(fmt.Sprintf(postCommentsUrl, post.Id))
 		body, _ := ioutil.ReadAll(resp.Body)
 
-		json.Unmarshal(body, &posts)
+		json.Unmarshal(body, &comments)
 
-		for _, post := range posts {
-			var comments []Comment
-			resWordCountMap := make(map[string]int)
-
-			resp, _ := http.Get(fmt.Sprintf(postCommentsUrl, post.Id))
-			body, _ := ioutil.ReadAll(resp.Body)
-
-			json.Unmarshal(body, &comments)
-
-			for _, comment := range comments {
-				for _, word := range strings.Fields(comment.Body) {
-					resWordCountMap[word]++
-				}
+		for _, comment := range comments {
+			for _, word := range strings.Fields(comment.Body) {
+				resWordCountMap[word]++
 			}
+		}
 
-			for word, count := range resWordCountMap {
-				db.Exec("INSERT INTO comments_statistics (post_id, word, count) VALUES ($1, $2, $3) ON CONFLICT (post_id, word) DO UPDATE SET count = $3", post.Id, word, count)
-			}
+		for word, count := range resWordCountMap {
+			db.Exec("INSERT INTO comments_statistics (post_id, word, count) VALUES ($1, $2, $3) ON CONFLICT (post_id, word) DO UPDATE SET count = $3", post.Id, word, count)
 		}
 	}
 }
