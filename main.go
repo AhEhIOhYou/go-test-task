@@ -70,7 +70,7 @@ func main() {
 
 	r.GET("/post/:id/comments/statistics", getStatisticsHandler)
 
-	log.Println("Успешно запущено на порту :8095")
+	log.Println("Успешно запущено на порту :8085")
 	log.Fatal(r.Run(":8085"))
 }
 
